@@ -1,0 +1,140 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+// Structure to store banned player information
+typedef struct {
+    char playerName[50];
+    time_t banTime;
+    int banDuration; // Duration in minutes
+} BanRecord;
+
+// Global list of banned players
+BanRecord bannedPlayers[100]; 
+int bannedPlayerCount = 0;
+
+// Function to load banned players from file
+void LoadBannedPlayers() {
+    FILE *file = fopen("data/bannedPlayers.txt", "r");
+    if (file != NULL) {
+        while (fscanf(file, "%49s|%ld|%d\n", bannedPlayers[bannedPlayerCount].playerName,
+                      &bannedPlayers[bannedPlayerCount].banTime, &bannedPlayers[bannedPlayerCount].banDuration) != EOF) {
+            bannedPlayerCount++;
+        }
+        fclose(file);
+    }
+}
+
+// Function to save banned players to file
+void SaveBannedPlayers() {
+    FILE *file = fopen("data/bannedPlayers.txt", "w");
+    if (file != NULL) {
+        for (int i = 0; i < bannedPlayerCount; i++) {
+            fprintf(file, "%s|%ld|%d\n", bannedPlayers[i].playerName,
+                    bannedPlayers[i].banTime, bannedPlayers[i].banDuration);
+        }
+        fclose(file);
+    }
+}
+
+// Function to check if a player is banned
+int IsPlayerBanned(const char *playerName) {
+    for (int i = 0; i < bannedPlayerCount; i++) {
+        if (strcmp(bannedPlayers[i].playerName, playerName) == 0) {
+            time_t currentTime = time(NULL);
+            double minutesSinceBan = difftime(currentTime, bannedPlayers[i].banTime) / 60;
+            if (minutesSinceBan <= bannedPlayers[i].banDuration) {
+                return 1; // Player is still banned
+            }
+        }
+    }
+    return 0; // Player is not banned
+}
+
+// Function to ban a player
+void BanPlayer(const char *playerName, int banDuration) {
+    if (!IsPlayerBanned(playerName)) {
+        BanRecord record;
+        strncpy(record.playerName, playerName, 50);
+        record.banTime = time(NULL);
+        record.banDuration = banDuration;
+        bannedPlayers[bannedPlayerCount++] = record;
+        SaveBannedPlayers();
+        printf("%s has been banned for %d minutes.\n", playerName, banDuration);
+        KickBannedPlayer(playerName);
+    } else {
+        printf("%s is already banned.\n", playerName);
+    }
+}
+
+// Function to unban a player
+void UnbanPlayer(const char *playerName) {
+    for (int i = 0; i < bannedPlayerCount; i++) {
+        if (strcmp(bannedPlayers[i].playerName, playerName) == 0) {
+            for (int j = i; j < bannedPlayerCount - 1; j++) {
+                bannedPlayers[j] = bannedPlayers[j + 1];
+            }
+            bannedPlayerCount--;
+            SaveBannedPlayers();
+            printf("%s has been unbanned.\n", playerName);
+            return;
+        }
+    }
+    printf("%s is not banned.\n", playerName);
+}
+
+// Function to check ban status of a player
+void CheckBanStatus(const char *playerName) {
+    for (int i = 0; i < bannedPlayerCount; i++) {
+        if (strcmp(bannedPlayers[i].playerName, playerName) == 0) {
+            time_t currentTime = time(NULL);
+            double minutesLeft = difftime(bannedPlayers[i].banTime + bannedPlayers[i].banDuration * 60, currentTime) / 60;
+            printf("%s is banned. Ban expires in %.0f minutes.\n", playerName, minutesLeft);
+            return;
+        }
+    }
+    printf("%s is not banned.\n", playerName);
+}
+
+// Function to kick a banned player
+void KickBannedPlayer(const char *playerName) {
+    if (IsPlayerBanned(playerName)) {
+        printf("%s has been kicked. You have been banned by Delta Executive Pack.\n", playerName);
+    } else {
+        printf("%s is not banned and can join.\n", playerName);
+    }
+}
+
+// Function to process commands
+void ProcessCommand(const char *command) {
+    char cmd[50], playerName[50];
+    int duration;
+
+    // Parse the command
+    sscanf(command, "%s %49s %d", cmd, playerName, &duration);
+
+    if (strcmp(cmd, "/ban") == 0) {
+        BanPlayer(playerName, duration);
+    } else if (strcmp(cmd, "/unban") == 0) {
+        UnbanPlayer(playerName);
+    } else if (strcmp(cmd, "/checkban") == 0) {
+        CheckBanStatus(playerName);
+    } else if (strcmp(cmd, "/kick") == 0) {
+        KickBannedPlayer(playerName);
+    } else {
+        printf("Unknown command: %s\n", cmd);
+    }
+}
+
+int main() {
+    LoadBannedPlayers();
+
+    // Example command processing
+    ProcessCommand("/ban PlayerOne 30");
+    ProcessCommand("/checkban PlayerOne");
+    ProcessCommand("/unban PlayerOne");
+    ProcessCommand("/checkban PlayerOne");
+
+    return 0;
+}
